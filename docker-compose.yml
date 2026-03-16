@@ -1,0 +1,51 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: card-postgres
+    environment:
+      POSTGRES_DB: card_db
+      POSTGRES_USER: card_user
+      POSTGRES_PASSWORD: card_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U card_user -d card_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - card-network
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: card-app
+    ports:
+      - "8080:8080"
+    environment:
+      # База данных
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/card_db
+      SPRING_DATASOURCE_USERNAME: card_user
+      SPRING_DATASOURCE_PASSWORD: card_pass
+      # Безопасность
+      APP_JWT_SECRET: ${JWT_SECRET:-mySecretKey123456789012345678901234567890}
+      APP_ENCRYPTION_KEY: ${ENCRYPTION_KEY:-MySecretKey123456}
+      # Профиль
+      SPRING_PROFILES_ACTIVE: docker
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - card-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  card-network:
+    driver: bridge

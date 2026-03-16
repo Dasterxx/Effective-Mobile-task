@@ -1,0 +1,78 @@
+databaseChangeLog:
+  - changeSet:
+      id: 002-create-cards-table
+      author: developer
+      changes:
+        - createTable:
+            tableName: cards
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: card_number
+                  type: varchar(255)
+                  constraints:
+                    nullable: false
+                    unique: true
+              - column:
+                  name: masked_number
+                  type: varchar(19)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: owner_name
+                  type: varchar(100)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: expiry_date
+                  type: date
+                  constraints:
+                    nullable: false
+              - column:
+                  name: status
+                  type: varchar(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: balance
+                  type: decimal(19,2)
+                  defaultValue: "0.00"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: currency
+                  type: varchar(3)
+                  defaultValue: "RUB"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: owner_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_cards_owner
+                    references: users(id)
+              - column:
+                  name: version
+                  type: bigint
+                  defaultValue: "0"
+              - column:
+                  name: created_at
+                  type: timestamp
+                  defaultValueComputed: CURRENT_TIMESTAMP
+              - column:
+                  name: updated_at
+                  type: timestamp
+                  defaultValueComputed: CURRENT_TIMESTAMP
+        - createIndex:
+            indexName: idx_cards_owner
+            tableName: cards
+            columns:
+              - column:
+                  name: owner_id

@@ -1,0 +1,20 @@
+databaseChangeLog:
+  - changeSet:
+      id: 004-insert-admin-user
+      author: developer
+      changes:
+        - insert:
+            tableName: users
+            columns:
+              - column:
+                  name: username
+                  value: admin
+              - column:
+                  name: password
+                  value: $2a$10$EqDKFh6Ah1n8tD5W/0q.Xe1F9QmZnKjR7vWqGZT6F2Q8L4sP3q8qG
+              - column:
+                  name: email
+                  value: admin@bank.com
+              - column:
+                  name: role
+                  value: ADMIN

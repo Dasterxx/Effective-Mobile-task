@@ -1,0 +1,8 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/card_db
+
+logging:
+  level:
+    nikita.com.bankcards: DEBUG
+    org.springframework.security: DEBUG

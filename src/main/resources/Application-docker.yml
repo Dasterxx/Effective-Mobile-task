@@ -1,0 +1,34 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://postgres:5432/card_db
+
+  liquibase:
+    contexts: docker
+springdoc:
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+    operations-sorter: method
+    try-it-out-enabled: true
+    # КРИТИЧНО ДЛЯ JWT:
+    bearer-token: true  # ← Включает Bearer авторизацию
+    # Отключаем лишние запросы:
+    display-request-duration: true
+    request-duration: true
+
+
+# Разрешить доступ в SecurityConfig
+logging:
+  level:
+    nikita.com.bankcards: INFO
+    org.springframework.security: INFO
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info  # или "*" для всех
+  endpoint:
+    health:
+      enabled: true
+      show-details: never  # или always для отладки
