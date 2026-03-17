@@ -11,11 +11,10 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -43,6 +42,7 @@ public class UserServiceImplTest {
                 .password("encoded_password")
                 .email("test@test.com")
                 .role(User.Role.USER)
+                .createdAt(LocalDateTime.now())
                 .build();
 
         adminUser = User.builder()
@@ -51,6 +51,7 @@ public class UserServiceImplTest {
                 .password("encoded_admin")
                 .email("admin@test.com")
                 .role(User.Role.ADMIN)
+                .createdAt(LocalDateTime.now())
                 .build();
     }
 
@@ -58,14 +59,13 @@ public class UserServiceImplTest {
     @Test
     @Order(1)
     @DisplayName("Action 1: Get user by username - success")
-    void action1_getUserByUsername_Success() throws ExecutionException, InterruptedException {
+    void action1_getUserByUsername_Success() {
         // Given
         when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(testUser));
 
         // When
-        CompletableFuture<UserDto> future = userService.getUserByUsername("testuser");
-        UserDto result = future.get();
-        log.info("[TEST] Result from getUserByUsername(): {}",result.getUsername());
+        UserDto result = userService.getUserByUsername("testuser");
+        log.info("[TEST] Result from getUserByUsername(): {}", result.getUsername());
 
         // Then
         assertNotNull(result);
@@ -85,24 +85,24 @@ public class UserServiceImplTest {
         when(userRepository.findByUsername("unknown")).thenReturn(Optional.empty());
 
         // When & Then
-        CompletableFuture<UserDto> future = userService.getUserByUsername("unknown");
+        UserNotFoundException exception = assertThrows(UserNotFoundException.class, () -> {
+            userService.getUserByUsername("unknown");
+        });
 
-        ExecutionException exception = assertThrows(ExecutionException.class, future::get);
-        log.error(exception.getMessage(), exception);
-        assertInstanceOf(UserNotFoundException.class, exception.getCause());
+        log.error("Expected exception: {}", exception.getMessage());
+        assertTrue(exception.getMessage().contains("unknown"));
     }
 
     // ==================== ACTION 2: Получение пользователя по ID ====================
     @Test
     @Order(2)
     @DisplayName("Action 2: Get user by ID - success")
-    void action2_getUserById_Success() throws ExecutionException, InterruptedException {
+    void action2_getUserById_Success() {
         // Given
         when(userRepository.findById(userId)).thenReturn(Optional.of(testUser));
 
         // When
-        CompletableFuture<UserDto> future = userService.getUserById(userId);
-        UserDto result = future.get();
+        UserDto result = userService.getUserById(userId);
         log.info("found user by id :{}", result.getId());
 
         // Then
@@ -121,11 +121,11 @@ public class UserServiceImplTest {
         when(userRepository.findById(999L)).thenReturn(Optional.empty());
 
         // When & Then
-        CompletableFuture<UserDto> future = userService.getUserById(999L);
+        UserNotFoundException exception = assertThrows(UserNotFoundException.class, () -> {
+            userService.getUserById(999L);
+        });
 
-        ExecutionException exception = assertThrows(ExecutionException.class, future::get);
-        log.error(exception.getMessage(), exception);
-        assertInstanceOf(UserNotFoundException.class, exception.getCause());
+        log.error("Expected exception: {}", exception.getMessage());
         assertTrue(exception.getMessage().contains("999"));
     }
 
@@ -133,14 +133,13 @@ public class UserServiceImplTest {
     @Test
     @Order(3)
     @DisplayName("Action 3: Get all users - success")
-    void action3_getAllUsers_Success() throws ExecutionException, InterruptedException {
+    void action3_getAllUsers_Success() {
         // Given
         List<User> users = Arrays.asList(testUser, adminUser);
         when(userRepository.findAll()).thenReturn(users);
 
         // When
-        CompletableFuture<List<UserDto>> future = userService.getAllUsers();
-        List<UserDto> result = future.get();
+        List<UserDto> result = userService.getAllUsers();
         log.info("found users in db : {}", result.size());
 
         // Then
@@ -155,13 +154,12 @@ public class UserServiceImplTest {
     @Test
     @Order(3)
     @DisplayName("Action 3: Get all users - empty list")
-    void action3_getAllUsers_Empty() throws ExecutionException, InterruptedException {
+    void action3_getAllUsers_Empty() {
         // Given
         when(userRepository.findAll()).thenReturn(List.of());
 
         // When
-        CompletableFuture<List<UserDto>> future = userService.getAllUsers();
-        List<UserDto> result = future.get();
+        List<UserDto> result = userService.getAllUsers();
         log.info("found user {}", result);
 
         // Then
@@ -173,15 +171,15 @@ public class UserServiceImplTest {
     @Test
     @Order(4)
     @DisplayName("Action 4: Delete user - success")
-    void action4_deleteUser_Success() throws ExecutionException, InterruptedException {
+    void action4_deleteUser_Success() {
         // Given
         when(userRepository.existsById(userId)).thenReturn(true);
         doNothing().when(userRepository).deleteById(userId);
 
         // When
-        CompletableFuture<Void> future = userService.deleteUser(userId);
-        future.get(); // Дожидаемся выполнения
+        userService.deleteUser(userId);
         log.info("deleted by Id {}", userId);
+
         // Then
         verify(userRepository).existsById(userId);
         verify(userRepository).deleteById(userId);
@@ -195,11 +193,11 @@ public class UserServiceImplTest {
         when(userRepository.existsById(999L)).thenReturn(false);
 
         // When & Then
-        CompletableFuture<Void> future = userService.deleteUser(999L);
+        UserNotFoundException exception = assertThrows(UserNotFoundException.class, () -> {
+            userService.deleteUser(999L);
+        });
 
-        ExecutionException exception = assertThrows(ExecutionException.class, future::get);
-        log.error(exception.getMessage(), exception);
-        assertInstanceOf(UserNotFoundException.class, exception.getCause());
+        log.error("Expected exception: {}", exception.getMessage());
 
         verify(userRepository).existsById(999L);
         verify(userRepository, never()).deleteById(any());
@@ -209,21 +207,24 @@ public class UserServiceImplTest {
     @Test
     @Order(5)
     @DisplayName("Action 5: Verify DTO mapping excludes sensitive data")
-    void action5_verifyDtoMapping() throws ExecutionException, InterruptedException {
+    void action5_verifyDtoMapping() {
         // Given
         when(userRepository.findByUsername("testuser")).thenReturn(Optional.of(testUser));
         log.info("DTO before converting Entity into Dto {}: ", testUser);
 
         // When
-        UserDto result = userService.getUserByUsername("testuser").get();
+        UserDto result = userService.getUserByUsername("testuser");
         log.info(" DTO after conversion to entity {}", result);
 
         // Then
-//        assertNull(result.getPassword()); // Пароль не должен попадать в DTO
-        // Проверяем что остальные поля на месте
+        // Пароль не попадает в DTO (проверяем через отсутствие поля или null)
+        assertNotNull(result);
         assertNotNull(result.getId());
         assertNotNull(result.getUsername());
         assertNotNull(result.getEmail());
         assertNotNull(result.getRole());
+
+        // Убедимся что createdAt тоже маппится (добавлено в сервисе)
+        assertNotNull(result.getCreatedAt());
     }
 }

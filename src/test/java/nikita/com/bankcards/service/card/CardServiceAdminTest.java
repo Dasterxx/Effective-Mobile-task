@@ -29,7 +29,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -107,7 +106,7 @@ public class CardServiceAdminTest {
     @Test
     @Order(1)
     @DisplayName("Admin Action 1: Create card for user - verifies encryption is called")
-    void admin_createCard_ForUser() throws ExecutionException, InterruptedException {
+    void admin_createCard_ForUser() {
         // Given
         CardCreateRequest request = new CardCreateRequest();
         request.setOwnerName("New Card Owner");
@@ -115,14 +114,10 @@ public class CardServiceAdminTest {
         request.setCurrency("USD");
 
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(regularUser));
-
-        // Мокируем шифрование - возвращаем любое значение, главное что вызовется
         when(encryptionService.encrypt(anyString()))
                 .thenReturn(CompletableFuture.completedFuture("ANY_ENCRYPTED_VALUE"));
-
         when(encryptionService.maskCardNumber(anyString()))
                 .thenReturn("**** **** **** 9999");
-
         when(cardRepository.save(any(Card.class))).thenAnswer(inv -> {
             Card c = inv.getArgument(0);
             c.setId(100L);
@@ -130,28 +125,24 @@ public class CardServiceAdminTest {
         });
 
         // When
-        CompletableFuture<CardDto> future = cardService.createCard(request, USER_ID);
-        CardDto result = future.get();
+        CardDto result = cardService.createCard(request, USER_ID);
 
         log.info("Created card DTO: id={}, status={}, currency={}, balance={}",
                 result.getId(), result.getStatus(), result.getCurrency(), result.getBalance());
 
-        // Then - проверяем бизнес-логику, не детали шифрования
+        // Then
         assertNotNull(result);
         assertEquals(Card.Status.ACTIVE, result.getStatus());
         assertEquals("USD", result.getCurrency());
         assertEquals(BigDecimal.ZERO, result.getBalance());
 
-        // Проверяем что шифрование ВЫЗВАНО (но не какие конкретно значения)
-        verify(encryptionService).encrypt(anyString()); // Любая строка (сгенерированный номер)
-        verify(encryptionService).maskCardNumber(anyString()); // Любая строка
-
-        // Проверяем что карта сохранена с зашифрованными данными
+        verify(encryptionService).encrypt(anyString());
+        verify(encryptionService).maskCardNumber(anyString());
         verify(cardRepository).save(argThat(card ->
                 card.getOwnerId().equals(USER_ID) &&
                         card.getStatus() == Card.Status.ACTIVE &&
-                        card.getCardNumber() != null && // Зашифрованный номер
-                        card.getMaskedNumber() != null && // Маскированный номер
+                        card.getCardNumber() != null &&
+                        card.getMaskedNumber() != null &&
                         card.getBalance().equals(BigDecimal.ZERO)
         ));
     }
@@ -162,15 +153,19 @@ public class CardServiceAdminTest {
     void admin_createCard_UserNotFound() {
         // Given
         CardCreateRequest request = new CardCreateRequest();
+        request.setOwnerName("Test Owner");
+        request.setExpiryDate(LocalDate.now().plusYears(2));
+        request.setCurrency("RUB");
+
         when(userRepository.findById(999L)).thenReturn(Optional.empty());
 
         // When & Then
-        CompletableFuture<CardDto> future = cardService.createCard(request, 999L);
-        ExecutionException ex = assertThrows(ExecutionException.class, future::get);
-        log.error(ex.getMessage(), ex);
-        assertInstanceOf(UserNotFoundException.class, ex.getCause());
+        UserNotFoundException exception = assertThrows(UserNotFoundException.class, () -> {
+            cardService.createCard(request, 999L);
+        });
 
-        // Проверяем что шифрование не вызывалось
+        log.error("Expected exception: {}", exception.getMessage());
+
         verifyNoInteractions(encryptionService);
         verifyNoInteractions(cardRepository);
     }
@@ -179,7 +174,7 @@ public class CardServiceAdminTest {
     @Test
     @Order(3)
     @DisplayName("Admin Action 3: Activate blocked card")
-    void admin_activateCard_Blocked() throws ExecutionException, InterruptedException {
+    void admin_activateCard_Blocked() {
         // Given
         Card blockedCard = Card.builder()
                 .id(3L)
@@ -198,8 +193,7 @@ public class CardServiceAdminTest {
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(regularUser));
 
         // When
-        CompletableFuture<CardDto> future = cardService.activateCard(3L);
-        CardDto result = future.get();
+        CardDto result = cardService.activateCard(3L);
         log.info("Activated card ID {}: ", result.getId());
 
         // Then
@@ -215,24 +209,23 @@ public class CardServiceAdminTest {
         when(cardRepository.findById(2L)).thenReturn(Optional.of(expiredCard));
 
         // When & Then
-        CompletableFuture<CardDto> future = cardService.activateCard(2L);
-        ExecutionException ex = assertThrows(ExecutionException.class, future::get);
-        log.error(ex.getMessage(), ex);
-        assertInstanceOf(CardExpiredException.class, ex.getCause());
+        CardExpiredException ex = assertThrows(CardExpiredException.class, () -> {
+            cardService.activateCard(2L);
+        });
+        log.error("Expected exception: {}", ex.getMessage());
     }
 
     // ==================== ADMIN: Удаление карты ====================
     @Test
     @Order(5)
     @DisplayName("Admin Action 5: Delete card")
-    void admin_deleteCard_Success() throws ExecutionException, InterruptedException {
+    void admin_deleteCard_Success() {
         // Given
         when(cardRepository.existsById(1L)).thenReturn(true);
         doNothing().when(cardRepository).deleteById(1L);
 
         // When
-        CompletableFuture<Void> future = cardService.deleteCard(1L);
-        future.get();
+        cardService.deleteCard(1L);
         log.info("[TEST] Deleted card {} successfully.", 1);
 
         // Then
@@ -248,17 +241,17 @@ public class CardServiceAdminTest {
         when(cardRepository.existsById(999L)).thenReturn(false);
 
         // When & Then
-        CompletableFuture<Void> future = cardService.deleteCard(999L);
-        ExecutionException ex = assertThrows(ExecutionException.class, future::get);
-        log.error(ex.getMessage(), ex);
-        assertInstanceOf(CardNotFoundException.class, ex.getCause());
+        CardNotFoundException ex = assertThrows(CardNotFoundException.class, () -> {
+            cardService.deleteCard(999L);
+        });
+        log.error("Expected exception: {}", ex.getMessage());
     }
 
     // ==================== ADMIN: Просмотр всех карт ====================
     @Test
     @Order(7)
     @DisplayName("Admin Action 7: View all cards with pagination")
-    void admin_viewAllCards_Pagination() throws ExecutionException, InterruptedException {
+    void admin_viewAllCards_Pagination() {
         // Given
         Pageable pageable = PageRequest.of(0, 10);
         Page<Card> allCards = new PageImpl<>(Arrays.asList(userCard, expiredCard), pageable, 2);
@@ -267,9 +260,7 @@ public class CardServiceAdminTest {
         when(userRepository.findById(any())).thenReturn(Optional.of(regularUser));
 
         // When
-        CompletableFuture<PageResponse<CardDto>> future =
-                cardService.getAllCards(null, null, pageable);
-        PageResponse<CardDto> result = future.get();
+        PageResponse<CardDto> result = cardService.getAllCards(null, null, pageable);
         log.info("all cards size :{}", result.getTotalElements());
 
         // Then
@@ -279,14 +270,13 @@ public class CardServiceAdminTest {
         assertTrue(result.getContent().stream()
                 .anyMatch(c -> c.getStatus() == Card.Status.EXPIRED));
 
-        // Шифрование не используется при просмотре
         verifyNoInteractions(encryptionService);
     }
 
     @Test
     @Order(8)
     @DisplayName("Admin Action 8: Filter cards by status")
-    void admin_viewAllCards_FilterByStatus() throws ExecutionException, InterruptedException {
+    void admin_viewAllCards_FilterByStatus() {
         // Given
         Pageable pageable = PageRequest.of(0, 10);
         Page<Card> activeCards = new PageImpl<>(Collections.singletonList(userCard), pageable, 1);
@@ -295,9 +285,7 @@ public class CardServiceAdminTest {
         when(userRepository.findById(any())).thenReturn(Optional.of(regularUser));
 
         // When
-        CompletableFuture<PageResponse<CardDto>> future =
-                cardService.getAllCards("ACTIVE", null, pageable);
-        PageResponse<CardDto> result = future.get();
+        PageResponse<CardDto> result = cardService.getAllCards("ACTIVE", null, pageable);
         log.info("active cards count by status {} ", result.getContent().size());
 
         // Then
@@ -308,7 +296,7 @@ public class CardServiceAdminTest {
     @Test
     @Order(9)
     @DisplayName("Admin Action 9: Filter cards by user ID")
-    void admin_viewAllCards_FilterByUser() throws ExecutionException, InterruptedException {
+    void admin_viewAllCards_FilterByUser() {
         // Given
         Pageable pageable = PageRequest.of(0, 10);
         Page<Card> userCards = new PageImpl<>(Arrays.asList(userCard, expiredCard), pageable, 2);
@@ -317,9 +305,7 @@ public class CardServiceAdminTest {
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(regularUser));
 
         // When
-        CompletableFuture<PageResponse<CardDto>> future =
-                cardService.getAllCards(null, USER_ID, pageable);
-        PageResponse<CardDto> result = future.get();
+        PageResponse<CardDto> result = cardService.getAllCards(null, USER_ID, pageable);
         log.info("filtered cards by userId {}", result.getContent().size());
 
         // Then
@@ -330,7 +316,7 @@ public class CardServiceAdminTest {
     @Test
     @Order(10)
     @DisplayName("Admin Action 10: Update card details")
-    void admin_updateCard() throws ExecutionException, InterruptedException {
+    void admin_updateCard() {
         // Given
         CardUpdateRequest request = new CardUpdateRequest();
         request.setOwnerName("Updated Owner Name");
@@ -342,15 +328,13 @@ public class CardServiceAdminTest {
 
         // When
         log.info("old card {}", request);
-        CompletableFuture<CardDto> future = cardService.updateCard(1L, request);
-        CardDto result = future.get();
+        CardDto result = cardService.updateCard(1L, request);
         log.info("updated card {}", result);
 
         // Then
         assertEquals(USER_ID, result.getOwnerId());
         assertEquals(Card.Status.BLOCKED, result.getStatus());
 
-        // Шифрование не используется при обновлении
         verifyNoInteractions(encryptionService);
     }
 }

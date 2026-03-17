@@ -28,9 +28,9 @@ import org.springframework.data.domain.Pageable;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -131,7 +131,7 @@ public class TransferServiceFullTest {
     @Test
     @Order(1)
     @DisplayName("Transfer Action 1: Successful transfer between own cards")
-    void transfer_success() throws ExecutionException, InterruptedException {
+    void transfer_success() {
         TransferRequest request = createRequest("1111222233334444", "5555666677778888", "100.00");
 
         when(userRepository.findByUsername(USERNAME)).thenReturn(Optional.of(testUser));
@@ -148,8 +148,7 @@ public class TransferServiceFullTest {
         when(cardRepository.save(any(Card.class))).thenAnswer(inv -> inv.getArgument(0));
 
         // When - перевод 100 рублей
-        CompletableFuture<TransferResponse> future = transferService.createTransfer(request, USERNAME);
-        TransferResponse result = future.get();
+        TransferResponse result = transferService.createTransfer(request, USERNAME);
         log.info("Transfer response received {}", result.getAmount());
 
         assertEquals(Transfer.Status.COMPLETED, result.getStatus());
@@ -166,8 +165,7 @@ public class TransferServiceFullTest {
     @Test
     @Order(2)
     @DisplayName("Transfer Action 2: Insufficient funds")
-    void transfer_insufficientFunds() throws ExecutionException, InterruptedException {
-        // Given - пытаемся перевести больше чем есть
+    void transfer_insufficientFunds() {
         TransferRequest request = createRequest("1111222233334444", "5555666677778888", "5000.00");
 
         when(userRepository.findByUsername(USERNAME)).thenReturn(Optional.of(testUser));
@@ -178,16 +176,16 @@ public class TransferServiceFullTest {
         when(cardRepository.findByCardNumberWithLock("ENC_TO")).thenReturn(Optional.of(toCard));
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(testUser));
 
-        CompletableFuture<TransferResponse> future = transferService.createTransfer(request, USERNAME);
-        ExecutionException ex = assertThrows(ExecutionException.class, future::get);
-        log.error(ex.getMessage(), ex);
-        assertInstanceOf(InsufficientFundsException.class, ex.getCause());
+        InsufficientFundsException ex = assertThrows(InsufficientFundsException.class, () -> {
+            transferService.createTransfer(request, USERNAME);
+        });
+        log.error("Expected exception: {}", ex.getMessage());
     }
 
     @Test
     @Order(3)
     @DisplayName("Transfer Action 3: Source card blocked")
-    void transfer_sourceCardBlocked() throws ExecutionException, InterruptedException {
+    void transfer_sourceCardBlocked() {
         TransferRequest request = createRequest("3333444455556666", "5555666677778888", "100.00");
 
         when(userRepository.findByUsername(USERNAME)).thenReturn(Optional.of(testUser));
@@ -197,16 +195,16 @@ public class TransferServiceFullTest {
         when(cardRepository.findByCardNumberWithLock("ENC_TO")).thenReturn(Optional.of(toCard));
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(testUser));
 
-        CompletableFuture<TransferResponse> future = transferService.createTransfer(request, USERNAME);
-        ExecutionException ex = assertThrows(ExecutionException.class, future::get);
-        log.error(ex.getMessage(), ex);
-        assertInstanceOf(CardBlockedException.class, ex.getCause());
+        CardBlockedException ex = assertThrows(CardBlockedException.class, () -> {
+            transferService.createTransfer(request, USERNAME);
+        });
+        log.error("Expected exception: {}", ex.getMessage());
     }
 
     @Test
     @Order(4)
     @DisplayName("Transfer Action 4: Destination card expired")
-    void transfer_destCardExpired() throws ExecutionException, InterruptedException {
+    void transfer_destCardExpired() {
         TransferRequest request = createRequest("1111222233334444", "7777888899990000", "100.00");
 
         when(userRepository.findByUsername(USERNAME)).thenReturn(Optional.of(testUser));
@@ -216,16 +214,16 @@ public class TransferServiceFullTest {
         when(cardRepository.findByCardNumberWithLock("ENC_EXPIRED")).thenReturn(Optional.of(expiredCard));
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(testUser));
 
-        CompletableFuture<TransferResponse> future = transferService.createTransfer(request, USERNAME);
-        ExecutionException ex = assertThrows(ExecutionException.class, future::get);
-        log.error(ex.getMessage(), ex);
-        assertInstanceOf(CardExpiredException.class, ex.getCause());
+        CardExpiredException ex = assertThrows(CardExpiredException.class, () -> {
+            transferService.createTransfer(request, USERNAME);
+        });
+        log.error("Expected exception: {}", ex.getMessage());
     }
 
     @Test
     @Order(5)
     @DisplayName("Transfer Action 5: Same card transfer not allowed")
-    void transfer_sameCard() throws ExecutionException, InterruptedException {
+    void transfer_sameCard() {
         TransferRequest request = createRequest("1111222233334444", "1111222233334444", "100.00");
 
         when(userRepository.findByUsername(USERNAME)).thenReturn(Optional.of(testUser));
@@ -237,16 +235,16 @@ public class TransferServiceFullTest {
                 .thenReturn(Optional.of(fromCard));
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(testUser));
 
-        CompletableFuture<TransferResponse> future = transferService.createTransfer(request, USERNAME);
-        ExecutionException ex = assertThrows(ExecutionException.class, future::get);
-        log.error(ex.getMessage(), ex);
-        assertInstanceOf(InvalidTransferException.class, ex.getCause());
+        InvalidTransferException ex = assertThrows(InvalidTransferException.class, () -> {
+            transferService.createTransfer(request, USERNAME);
+        });
+        log.error("Expected exception: {}", ex.getMessage());
     }
 
     @Test
     @Order(6)
     @DisplayName("Transfer Action 6: Cannot transfer to other user's card")
-    void transfer_otherUserCard() throws ExecutionException, InterruptedException {
+    void transfer_otherUserCard() {
         Card otherUserCard = Card.builder()
                 .id(5L)
                 .cardNumber("ENC_OTHER")
@@ -256,7 +254,7 @@ public class TransferServiceFullTest {
                 .status(Card.Status.ACTIVE)
                 .balance(BigDecimal.ZERO)
                 .currency("RUB")
-                .ownerId(999L) // Другой пользователь
+                .ownerId(999L)
                 .version(1L)
                 .build();
 
@@ -272,17 +270,17 @@ public class TransferServiceFullTest {
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(testUser));
         when(userRepository.findById(999L)).thenReturn(Optional.of(otherUser));
 
-        CompletableFuture<TransferResponse> future = transferService.createTransfer(request, USERNAME);
-        ExecutionException ex = assertThrows(ExecutionException.class, future::get);
-        log.error(ex.getMessage(), ex);
-        assertInstanceOf(UnauthorizedAccessException.class, ex.getCause());
+        UnauthorizedAccessException ex = assertThrows(UnauthorizedAccessException.class, () -> {
+            transferService.createTransfer(request, USERNAME);
+        });
+        log.error("Expected exception: {}", ex.getMessage());
     }
 
     // ==================== USER: История переводов ====================
     @Test
     @Order(7)
     @DisplayName("Transfer Action 7: View my transfer history")
-    void transfer_viewHistory() throws ExecutionException, InterruptedException {
+    void transfer_viewHistory() {
         Pageable pageable = PageRequest.of(0, 10);
         Transfer t1 = Transfer.builder()
                 .id(1L)
@@ -308,9 +306,7 @@ public class TransferServiceFullTest {
         when(cardRepository.findById(1L)).thenReturn(Optional.of(fromCard));
         when(cardRepository.findById(2L)).thenReturn(Optional.of(toCard));
 
-        CompletableFuture<PageResponse<TransferResponse>> future =
-                transferService.getUserTransfers(USERNAME, pageable);
-        PageResponse<TransferResponse> result = future.get();
+        PageResponse<TransferResponse> result = transferService.getUserTransfers(USERNAME, pageable);
         log.info("My transfer story is {}", result.getContent().size());
 
         assertEquals(2, result.getContent().size());
@@ -320,7 +316,7 @@ public class TransferServiceFullTest {
     @Test
     @Order(8)
     @DisplayName("Transfer Action 8: View transfers by card")
-    void transfer_viewByCard() throws ExecutionException, InterruptedException {
+    void transfer_viewByCard() {
         Pageable pageable = PageRequest.of(0, 10);
         Transfer t1 = Transfer.builder()
                 .id(1L)
@@ -330,16 +326,14 @@ public class TransferServiceFullTest {
                 .status(Transfer.Status.COMPLETED)
                 .build();
 
-        Page<Transfer> transfers = new PageImpl<>(Arrays.asList(t1), pageable, 1);
+        Page<Transfer> transfers = new PageImpl<>(Collections.singletonList(t1), pageable, 1);
 
         when(cardRepository.existsById(1L)).thenReturn(true);
         when(transferRepository.findByCardId(1L, pageable)).thenReturn(transfers);
         when(cardRepository.findById(1L)).thenReturn(Optional.of(fromCard));
         when(cardRepository.findById(2L)).thenReturn(Optional.of(toCard));
 
-        CompletableFuture<PageResponse<TransferResponse>> future =
-                transferService.getCardTransfers(1L, pageable);
-        PageResponse<TransferResponse> result = future.get();
+        PageResponse<TransferResponse> result = transferService.getCardTransfers(1L, pageable);
         log.info("Cards' transer stories are {}", result.getContent().size());
 
         assertEquals(1, result.getContent().size());

@@ -63,21 +63,16 @@ public class EncryptionServiceImpl implements EncryptionService {
         if (cardNumber == null || cardNumber.length() < 4) {
             return cardNumber;
         }
-        // Если номер зашифрован (Base64), показываем маску по длине
-        // Или расшифровываем для маскирования последних 4 цифр
         String cleanNumber = cardNumber;
         if (cardNumber.length() > 16) {
-            // Вероятно зашифрован, пробуем расшифровать для маски
             try {
                 cleanNumber = decrypt(cardNumber).join();
             } catch (Exception e) {
-                // Если не удалось расшифровать, используем как есть
                 cleanNumber = cardNumber;
             }
         }
 
-        // Оставляем только последние 4 цифры
-        String last4 = cleanNumber.replaceAll("\\D", ""); // Убираем все не-цифры
+        String last4 = cleanNumber.replaceAll("\\D", "");
         if (last4.length() >= 4) {
             last4 = last4.substring(last4.length() - 4);
         }
@@ -85,7 +80,6 @@ public class EncryptionServiceImpl implements EncryptionService {
     }
 
     private byte[] getKeyBytes() {
-        // AES-128 требует ключ 16 байт
         String key = String.format("%-16s", secretKey).substring(0, 16);
         return key.getBytes(StandardCharsets.UTF_8);
     }

@@ -17,9 +17,6 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
@@ -48,7 +45,7 @@ public class AuthServiceImplTest {
     @Test
     @Order(1)
     @DisplayName("Action 1: Authenticate user successfully")
-    void action1_authenticate_Success() throws ExecutionException, InterruptedException {
+    void action1_authenticate_Success() {
         LoginRequest request = new LoginRequest();
         request.setUsername(USERNAME);
         request.setPassword(PASSWORD);
@@ -68,24 +65,22 @@ public class AuthServiceImplTest {
         when(userRepository.findByUsername(USERNAME)).thenReturn(java.util.Optional.of(user));
 
         // When
-        CompletableFuture<AuthResponse> future = authService.authenticate(request);
-        AuthResponse result = future.get();
-        log.info("Auth success result {}", result);
+        AuthResponse response = authService.authenticate(request);  // ← просто вызов
+        log.info("Auth success result {}", response);
 
         // Then
-        assertNotNull(result);
-        assertEquals(TOKEN, result.getToken());
-        assertEquals("Bearer", result.getType());
-        assertEquals(1L, result.getUserId());
-        assertEquals(USERNAME, result.getUsername());
-        assertEquals("USER", result.getRole());
+        assertNotNull(response);
+        assertEquals(TOKEN, response.getToken());
+        assertEquals("Bearer", response.getType());
+        assertEquals(1L, response.getUserId());
+        assertEquals(USERNAME, response.getUsername());
+        assertEquals("USER", response.getRole());
     }
 
     @Test
     @Order(2)
     @DisplayName("Action 2: Authenticate - bad credentials")
     void action2_authenticate_BadCredentials() {
-        // Given
         LoginRequest request = new LoginRequest();
         request.setUsername(USERNAME);
         request.setPassword("wrongpassword");
@@ -93,18 +88,16 @@ public class AuthServiceImplTest {
         when(authenticationManager.authenticate(any()))
                 .thenThrow(new BadCredentialsException("Bad credentials"));
 
-        // When & Then
-        CompletableFuture<AuthResponse> future = authService.authenticate(request);
-        ExecutionException exception = assertThrows(ExecutionException.class, future::get);
-        log.error(exception.getMessage(),exception);
-        assertInstanceOf(BadCredentialsException.class, exception.getCause());
+        // When & Then - проверяем прямое исключение
+        assertThrows(BadCredentialsException.class, () -> {
+            authService.authenticate(request);
+        });
     }
 
     @Test
     @Order(3)
     @DisplayName("Action 3: Authenticate - user not found in database")
     void action3_authenticate_UserNotFound() {
-        // Given
         LoginRequest request = new LoginRequest();
         request.setUsername("unknown");
         request.setPassword(PASSWORD);
@@ -115,10 +108,11 @@ public class AuthServiceImplTest {
         when(tokenProvider.generateToken(authentication)).thenReturn("token");
         when(userRepository.findByUsername("unknown")).thenReturn(java.util.Optional.empty());
 
-        // When & Then
-        CompletableFuture<AuthResponse> future = authService.authenticate(request);
-        ExecutionException exception = assertThrows(ExecutionException.class, future::get);
-        log.error(exception.getMessage(), exception);
-        assertInstanceOf(UserNotFoundException.class, exception.getCause());
+        // When & Then - проверяем прямое исключение
+        UserNotFoundException exception = assertThrows(UserNotFoundException.class, () -> {
+            authService.authenticate(request);
+        });
+
+        assertEquals("User not found", exception.getMessage());
     }
 }
